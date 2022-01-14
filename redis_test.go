@@ -189,7 +189,7 @@ var _ = Describe("Client", func() {
 		createdAt := cn.UsedAt()
 
 		client.Pool().Put(cn)
-		Expect(cn.UsedAt().Equal(createdAt)).To(BeTrue())
+		Expect(cn.UsedAt() == createdAt).To(BeTrue())
 
 		err = client.Ping().Err()
 		Expect(err).NotTo(HaveOccurred())
@@ -197,7 +197,7 @@ var _ = Describe("Client", func() {
 		cn, err = client.Pool().Get()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cn).NotTo(BeNil())
-		Expect(cn.UsedAt().After(createdAt)).To(BeTrue())
+		Expect(cn.UsedAt() > createdAt).To(BeTrue())
 	})
 
 	It("should process command with special chars", func() {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"unsafe"
 
 	"github.com/go-redis/redis/internal/util"
 )
@@ -113,9 +114,11 @@ func (r *Reader) ReadString() (string, error) {
 	case StringReply:
 		return r.readStringReply(line)
 	case StatusReply:
-		return string(line[1:]), nil
+		data := line[1:]
+		return *(*string)(unsafe.Pointer(&data)), nil
 	case IntReply:
-		return string(line[1:]), nil
+		data := line[1:]
+		return *(*string)(unsafe.Pointer(&data)), nil
 	default:
 		return "", fmt.Errorf("redis: can't parse reply=%.100q reading string", line)
 	}

@@ -1,10 +1,12 @@
 package redis
 
 import (
+	"bytes"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/internal"
@@ -43,9 +45,15 @@ func cmdsFirstErr(cmds []Cmder) error {
 
 func writeCmd(wr *proto.Writer, cmds ...Cmder) error {
 	for _, cmd := range cmds {
-		err := wr.WriteArgs(cmd.Args())
-		if err != nil {
-			return err
+		if v, ok := cmd.(*StatusRawCmd); ok {
+			if _, err := wr.WriteBytes(v.Bytes()); err != nil {
+				return err
+			}
+		} else {
+			err := wr.WriteArgs(cmd.Args())
+			if err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -95,7 +103,7 @@ type baseCmd struct {
 	_args []interface{}
 	err   error
 
-	_readTimeout *time.Duration
+	_readTimeout time.Duration
 }
 
 var _ Cmder = (*Cmd)(nil)
@@ -127,11 +135,11 @@ func (cmd *baseCmd) Name() string {
 }
 
 func (cmd *baseCmd) readTimeout() *time.Duration {
-	return cmd._readTimeout
+	return &cmd._readTimeout
 }
 
 func (cmd *baseCmd) setReadTimeout(d time.Duration) {
-	cmd._readTimeout = &d
+	cmd._readTimeout = d
 }
 
 func (cmd *baseCmd) setErr(e error) {
@@ -347,10 +355,29 @@ type StatusCmd struct {
 
 var _ Cmder = (*StatusCmd)(nil)
 
+type StatusRawCmd struct {
+	baseCmd
+
+	buffer *bytes.Buffer
+	val    string
+}
+
+var _ Cmder = (*StatusRawCmd)(nil)
+
 func NewStatusCmd(args ...interface{}) *StatusCmd {
 	return &StatusCmd{
 		baseCmd: baseCmd{_args: args},
 	}
+}
+
+var cmdPool = &sync.Pool{New: func() interface{} {
+	return &StatusRawCmd{}
+}}
+
+func NNewStatusCmd(buffer *bytes.Buffer) *StatusRawCmd {
+	cmd := cmdPool.Get().(*StatusRawCmd)
+	cmd.buffer = buffer
+	return cmd
 }
 
 func (cmd *StatusCmd) Val() string {
@@ -368,6 +395,31 @@ func (cmd *StatusCmd) String() string {
 func (cmd *StatusCmd) readReply(rd *proto.Reader) error {
 	cmd.val, cmd.err = rd.ReadString()
 	return cmd.err
+}
+
+func (cmd *StatusRawCmd) Return() {
+	cmdPool.Put(cmd)
+}
+
+func (cmd *StatusRawCmd) Val() string {
+	return cmd.val
+}
+
+func (cmd *StatusRawCmd) Result() (string, error) {
+	return cmd.val, cmd.err
+}
+
+func (cmd *StatusRawCmd) String() string {
+	return cmdString(cmd, cmd.val)
+}
+
+func (cmd *StatusRawCmd) readReply(rd *proto.Reader) error {
+	cmd.val, cmd.err = rd.ReadString()
+	return cmd.err
+}
+
+func (cmd *StatusRawCmd) Bytes() []byte {
+	return cmd.buffer.Bytes()
 }
 
 //------------------------------------------------------------------------------

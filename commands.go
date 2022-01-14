@@ -1,8 +1,11 @@
 package redis
 
 import (
+	"bytes"
 	"errors"
+	"github.com/go-redis/redis/internal/proto"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/internal"
@@ -840,6 +843,37 @@ func (c *cmdable) Set(key string, value interface{}, expiration time.Duration) *
 	}
 	cmd := NewStatusCmd(args...)
 	c.process(cmd)
+	return cmd
+}
+
+var bytesPool = &sync.Pool{New: func() interface{} {
+	return bytes.NewBuffer(make([]byte, 4096))
+}}
+
+var writerPool = &sync.Pool{New: func() interface{} {
+	return proto.NewWriter(nil)
+}}
+
+func (c *cmdable) SetString(key, value string) *StatusRawCmd {
+	buffer := bytesPool.Get().(*bytes.Buffer)
+	defer bytesPool.Put(buffer)
+	buffer.Reset()
+
+	w := writerPool.Get().(*proto.Writer)
+	defer writerPool.Put(w)
+	w.Reset(buffer)
+
+	if err := w.WriteSetStringCmd(key, value); err != nil {
+		panic(err)
+	}
+	if err := w.Flush(); err != nil {
+		panic(err)
+	}
+
+	cmd := NNewStatusCmd(buffer)
+	if err := c.process(cmd); err != nil {
+		panic(err)
+	}
 	return cmd
 }
 

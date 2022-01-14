@@ -20,7 +20,7 @@ type Conn struct {
 	Inited    bool
 	pooled    bool
 	createdAt time.Time
-	usedAt    atomic.Value
+	usedAt    int64
 }
 
 func NewConn(netConn net.Conn) *Conn {
@@ -30,16 +30,16 @@ func NewConn(netConn net.Conn) *Conn {
 	}
 	cn.rd = proto.NewReader(netConn)
 	cn.wr = proto.NewWriter(netConn)
-	cn.SetUsedAt(time.Now())
+	cn.SetUsedAt(time.Duration(time.Now().UnixNano()))
 	return cn
 }
 
-func (cn *Conn) UsedAt() time.Time {
-	return cn.usedAt.Load().(time.Time)
+func (cn *Conn) UsedAt() time.Duration {
+	return time.Duration(cn.usedAt)
 }
 
-func (cn *Conn) SetUsedAt(tm time.Time) {
-	cn.usedAt.Store(tm)
+func (cn *Conn) SetUsedAt(tm time.Duration) {
+	atomic.StoreInt64(&cn.usedAt, int64(tm))
 }
 
 func (cn *Conn) SetNetConn(netConn net.Conn) {
@@ -50,7 +50,7 @@ func (cn *Conn) SetNetConn(netConn net.Conn) {
 
 func (cn *Conn) setReadTimeout(timeout time.Duration) error {
 	now := time.Now()
-	cn.SetUsedAt(now)
+	cn.SetUsedAt(time.Duration(now.UnixNano()))
 	if timeout > 0 {
 		return cn.netConn.SetReadDeadline(now.Add(timeout))
 	}
@@ -59,7 +59,7 @@ func (cn *Conn) setReadTimeout(timeout time.Duration) error {
 
 func (cn *Conn) setWriteTimeout(timeout time.Duration) error {
 	now := time.Now()
-	cn.SetUsedAt(now)
+	cn.SetUsedAt(time.Duration(now.UnixNano()))
 	if timeout > 0 {
 		return cn.netConn.SetWriteDeadline(now.Add(timeout))
 	}

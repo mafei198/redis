@@ -26,6 +26,10 @@ func NewWriter(wr io.Writer) *Writer {
 	}
 }
 
+func (w *Writer) WriteBytes(data []byte) (int, error) {
+	return w.wr.Write(data)
+}
+
 func (w *Writer) WriteArgs(args []interface{}) error {
 	err := w.wr.WriteByte(ArrayReply)
 	if err != nil {
@@ -42,6 +46,32 @@ func (w *Writer) WriteArgs(args []interface{}) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (w *Writer) WriteSetStringCmd(key, value string) error {
+	err := w.wr.WriteByte(ArrayReply)
+	if err != nil {
+		return err
+	}
+
+	err = w.writeLen(3)
+	if err != nil {
+		return err
+	}
+
+	if err := w.string("set"); err != nil {
+		return err
+	}
+
+	if err := w.string(key); err != nil {
+		return err
+	}
+
+	if err := w.string(value); err != nil {
+		return err
 	}
 
 	return nil

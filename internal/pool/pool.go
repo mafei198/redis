@@ -464,10 +464,11 @@ func (p *ConnPool) isStaleConn(cn *Conn) bool {
 		return false
 	}
 
-	now := time.Now()
-	if p.opt.IdleTimeout > 0 && now.Sub(cn.UsedAt()) >= p.opt.IdleTimeout {
+	diff := time.Duration(time.Now().UnixNano()) - cn.UsedAt()
+	if p.opt.IdleTimeout > 0 && diff >= p.opt.IdleTimeout {
 		return true
 	}
+	now := time.Now()
 	if p.opt.MaxConnAge > 0 && now.Sub(cn.createdAt) >= p.opt.MaxConnAge {
 		return true
 	}
